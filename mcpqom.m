@@ -123,6 +123,9 @@ end
 data = mocapData.data(frameIni:frameEnd,:);
 %===============================================
 
+%// TODO SCHRAMM - think about the window size (normalization) so that distinct BPM will have same output quantities.
+
+
 %%% filter settings
 %===============================================
 fs = mocapData.freq;
@@ -228,7 +231,7 @@ freqWn = []; % cuttof frequency per band
 %%% converts note duration to frequency (Hz)
 for k=1:length(fB)
     freqWn(k) = 2*fB(k)/fs; % cutoff freq
-    Wn = 2*[fB(k)-(fB(k)/10) fB(k)+(fB(k)/10)]/fs; % band pass 
+    Wn = 2*[fB(k)-(fB(k)/10) fB(k)+(fB(k)/10)]/fs; % band pass  // TODO SCHRAMM (think about the width of each band)
 
     for j=1:size(skelData,2); % each marker
         v = skelData(:,j); 
