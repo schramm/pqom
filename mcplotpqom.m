@@ -44,18 +44,23 @@ markerName = pqom_parameters.markerName;
 %===============================================
 
 color='rgbkmrgbkmrgbkmrgbkmrgbkmrgbkm';
-if length(markerName)==1    
-    str = ['Anchor: origin => Markers: ', markerName{:}];     
-else
-    str = ['Anchor: ',markerName{1}, ' => Markers: '];
-    for n=2:length(markerName)
-        str = [str, ' ', markerName{n},',']; 
-    end
-    str = str(1:end-1);
+str = ['Markers: '];
+for n=1:length(markerName)
+    str = [str, ' ', markerName{n},','];
 end
+str = str(1:end-1);
 
-figure('Name','Periodic Quantity of Motion','NumberTitle','on'); hold on;
-for k=1:size(PQoM_Buffer,2);
+
+% for k=1:size(pqom_buffer,2)-1
+%     plot(pqom_buffer(:,k), color(k));
+% end
+
+
+fh1 = figure('Name','Periodic Quantity of Motion','NumberTitle','on');
+
+
+hold on;
+for k=1:size(PQoM_Buffer,2)-1
     plot(PQoM_Buffer(:,k), color(k));
 end
 ax = gca;
@@ -70,11 +75,37 @@ xlabel(['time position (seconds)  bpm=', num2str(bpm)]);
 a = axis; a(1) = 0; a(2) = size(PQoM_Buffer,1);
 axis(a);
 title(str, 'interpreter', 'none');
-legend( noteType);
+legend( noteType{1:end-1});
 %===============================================
 %%% color map per band
-figure('Name','Periodic Quantity of Motion','NumberTitle','on'); hold on;
-imagesc(PQoM_Buffer');
+fh2 = figure('Name','Periodic Quantity of Motion','NumberTitle','on'); hold on;
+
+sfh2 = subplot(2,1,2);
+sfh2.Position = [0.1 0.1 0.85 0.1];
+ax = gca;
+imagesc(PQoM_Buffer(:,end)');
+set(ax,'YTick',1);
+set(ax,'YTickLabel',noteType{end});
+set(ax,'XTick',1:size(PQoM_Buffer,1)/10:size(PQoM_Buffer,1));
+set(ax,'XTickLabel', [0:size(PQoM_Buffer,1)/10:size(PQoM_Buffer,1)]*(hs/fs));
+a = axis; a(1) = 0; a(2) = size(PQoM_Buffer,1);
+axis(a);
+hcb=colorbar;
+yt = get(hcb,'YTick');
+cblabels={};
+for k=1:length(yt)
+    cblabels{k} = sprintf("%s/s",num2str(yt(k))); 
+end
+set(hcb,'YTick',yt);
+set(hcb,'YTickLabel',cblabels);
+
+sfh1 = subplot(2,1,1);
+sfh1.Position = [0.1 0.3 0.85 0.6];
+
+%ah1 = axes('Parent',fh2,'Units','normalized','Position',[0.1 0.3 0.8 0.6]);
+%ah1 = axes(sfh1,'Units','normalized','Position',[0.1 0.3 0.8 0.6]);
+
+imagesc(PQoM_Buffer(:,1:end-1)');
 ax = gca;
 set(ax,'YTick',1:size(PQoM_Buffer,2));
 set(ax,'YTickLabel',noteType);
@@ -86,7 +117,18 @@ set(ax,'XTickLabel', [0:size(PQoM_Buffer,1)/10:size(PQoM_Buffer,1)]*(hs/fs));
 xlabel(['time position (seconds)  bpm=', num2str(bpm)]);
 a = axis; a(1) = 0; a(2) = size(PQoM_Buffer,1);
 axis(a);
-colorbar;
+hcb=colorbar;
+yt = get(hcb,'YTick');
+cblabels={};
+for k=1:length(yt)
+    cblabels{k} = sprintf("%s/s",num2str(yt(k))); 
+end
+set(hcb,'YTick',yt);
+set(hcb,'YTickLabel',cblabels);
+
 title(str, 'interpreter', 'none');
+
+
+
 
 end
