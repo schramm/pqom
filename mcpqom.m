@@ -231,8 +231,9 @@ if winSize>length(sig)
 end
 
 s = length(sig);
+hWinSize = round(winSize/2);
 % append signal
-asig = [zeros([1 winSize/2])+sig(1) sig zeros([1 winSize/2])+sig(end)];
+asig = [zeros([1 hWinSize])+sig(1) sig zeros([1 hWinSize])+sig(end)];
 % alloc ouput
 q = zeros([1 ceil(length(sig)/hopSize)]);
 
@@ -241,8 +242,8 @@ q = zeros([1 ceil(length(sig)/hopSize)]);
 ffq = zeros([ceil(length(sig)/hopSize), nPointFFT/2+1]);
 ffHz = zeros([ceil(length(sig)/hopSize), length(freqCenterHz)+1]);
 c=0;
-for i=winSize/2+1:hopSize:s+winSize/2
-    ss = asig(i-winSize/2:i+winSize/2); % crop window
+for i=hWinSize+1:hopSize:s+hWinSize
+    ss = asig(i-hWinSize:i+hWinSize); % crop window
     d = diff(ss);                       % diff
     d = sum(abs(d));                    % TODO: if winSize is even, window size is equal to winSize+1
     c=c+1;
