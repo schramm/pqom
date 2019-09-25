@@ -7,10 +7,8 @@ function [pqom_buffer, pqom_parameters] = mcpqom(mocapData, markerName, frameRan
 % input parameters
 % mocapData: MoCap data structure. 
 % markerName: cell array containg the name (string) of skeleton markers where the PQoM will be estimated. 
-%            If only one marker name is passed then the anchor reference is the origin [0 0 0]' of the world coordinate system. 
-%            In case of two or more marker names are passed then the first marker name is the anchor (world reference) point.
-%            eg.: markerName = {'torso_spine', 'left_hand'}; % The PQoM is estimated from 
-%            the 'left_hand' marker using the 'torso_spine' as anchor point.
+%            In case of two or more marker names are passed then the PQoM will be the sum of PQoM estimates for each marker.
+%            eg.: markerName = {'torso_spine', 'left_hand'}; 
 %% TODO allow the use of both numbers and strings.
 %
 %%
@@ -177,6 +175,7 @@ for k=1:length(markerName)
     y(isnan(y))=0;
     z(isnan(z))=0;
 
+    % estimate PQoM at each axis (x,y and z)
     [q_x,ffq_x, ffHz_x,pqom_x] = rs_pqom(x', ws, hs, fs, freqCenterHz,bandSize);
     [q_y,ffq_y, ffHz_y,pqom_y] = rs_pqom(y', ws, hs, fs, freqCenterHz,bandSize);
     [q_z,ffq_z, ffHz_z,pqom_z] = rs_pqom(z', ws, hs, fs, freqCenterHz,bandSize);       
@@ -186,7 +185,7 @@ for k=1:length(markerName)
         qom = zeros(size(q_x));
     end
     pqom_buffer =  pqom_buffer + pqom_x + pqom_y +pqom_z;        
-    qom = qom + q_x + q_y+q_z;
+    qom = qom + q_x + q_y + q_z;
     c = c+3;
 end
 
@@ -231,7 +230,7 @@ if winSize>length(sig)
 end
 
 s = length(sig);
-hWinSize = round(winSize/2);
+hWinSize = floor(winSize/2);
 % append signal
 asig = [zeros([1 hWinSize])+sig(1) sig zeros([1 hWinSize])+sig(end)];
 % alloc ouput
