@@ -5,12 +5,13 @@ function [pqom_buffer, pqom_parameters] = mcpqom(mocapData, markerName, frameRan
 % [pqom_buffer, pqom_parameters] = mcpqom(mocapData, markerName, frameRange, bpm, noteDiv, winSize, hopSize)
 % 
 % input parameters
-% mocapData: MoCap data structure.
+% mocapData: MoCap data structure. 
 % markerName: cell array containg the name (string) of skeleton markers where the PQoM will be estimated. 
-%            If only one marker name is passed then the anchor reference is the origin [0 0 0]' of the world coordinate system. 
-%            In case of two or more marker names are passed then the first marker name is the anchor (world reference) point.
-%            eg.: markerName = {'torso_spine', 'left_hand'}; % The PQoM is estimated from 
-%            the 'left_hand' marker using the 'torso_spine' as anchor point.
+%            In case of two or more marker names are passed then the PQoM will be the sum of PQoM estimates for each marker.
+%            eg.: markerName = {'torso_spine', 'left_hand'}; 
+%% TODO allow the use of both numbers and strings.
+%
+%%
 % frameRange: [ini end] array that specifies the range of data frames from mocapData (default: full range == [])
 % bpm: beats per minute of the analised song (default: 60)
 % noteDiv: string with the note divisions used on the PQoM estimation.
@@ -42,8 +43,13 @@ function [pqom_buffer, pqom_parameters] = mcpqom(mocapData, markerName, frameRan
 % mcplotpqom
 %
 % ===============================================
-% Version 1.0
+% Version 1.0 
 % July 2015
+%
+% Updates: 
+% Version 1.1 (in progress)
+% August 2019
+
 % ===============================================
 % Rodrigo Schramm (rodrigo.schramm@gmail.com)  and   Federico Visi (federico.visi@plymouth.ac.uk) 
 % UFRGS / Brazil          ICCMR / Plymouth University / UK
@@ -123,13 +129,11 @@ end
 data = mocapData.data(frameIni:frameEnd,:);
 %===============================================
 
-%// TODO SCHRAMM - think about the window size (normalization) so that distinct BPM will have same output quantities.
-
+[freqCenterHz, noteType] = convertNoteDiv2FreqHz(noteDiv, bpm);
 
 %%% filter settings
 %===============================================
 fs = mocapData.freq;
-%ws = ceil( (60/bpm) * winSize * fs); % window size (in frames)
 ws = max(round((60/bpm)*winSize*fs),1); % window size (in frames)
 hs = max(round((60/bpm)*hopSize*fs),1); % hop size (in frames)
 
@@ -139,15 +143,12 @@ if ws>=size(data,1)
     error('mcpqom:input_parameters', 'Input parameter [frameRange] is too small for the specified winSize [winSize=%2.2f]. \nframeRange size should have at least %d frames.',winSize, ws+1);    
 end
 
-anchor = [];
-c = 1;
+c=0;
 %%% iterate and get PQoM for each skeleton marker in markerName array.
 for k=1:length(markerName)    
     mName = markerName{k}; % input parameter array
     idx = strcmp(mName, mocapData.markerName);
-    if sum(idx)==0
-        [y,fs] = audioread('mcsound.wav');
-        sound(y,fs);
+    if sum(idx)==0        
         error('mcpqom:input_parameters', 'MarkerName [%s] is not available in MoCap structure.', mName);
         return;
     end
@@ -169,35 +170,33 @@ for k=1:length(markerName)
     y(isnan(y))=0;
     z(isnan(z))=0;
 
-    %%% 
-    if c==1 && length(markerName)>1  
-        anchor = [x,y,z];
-    elseif length(markerName)==1  %% anchor point is the origin [0 0 0]'.
-        dd = ([x,y,z]).^2;
-        dd = sqrt(sum(dd'))';
-        qom(:,1) =  dd;        
-        warning('mcpqom:input_parameters','Anchor point is [0 0 0].');
-    else
-        dd = (anchor - [x,y,z]).^2;
-        dd = sqrt(sum(dd'))';
-        qom(:,c-1) =  dd;
-    end    
-    c=c+1;
+    % estimate PQoM at each axis (x,y and z)
+    [q_x,ffq_x, ffHz_x,pqom_x] = rs_pqom(x', ws, hs, fs, freqCenterHz);
+    [q_y,ffq_y, ffHz_y,pqom_y] = rs_pqom(y', ws, hs, fs, freqCenterHz);
+    [q_z,ffq_z, ffHz_z,pqom_z] = rs_pqom(z', ws, hs, fs, freqCenterHz);       
+    
+    if (isempty(pqom_buffer)) 
+        pqom_buffer = zeros(size(pqom_x));
+        qom = zeros(size(q_x));
+    end
+   pqom_buffer =  pqom_buffer + pqom_x + pqom_y +pqom_z;        
+   qom = qom + q_x + q_y + q_z;
+ %  pqom_buffer =  pqom_buffer + pqom_x;        
+ %  qom = qom + q_x;
+
+   c = c+3;
+ %  c=c+1;
 end
 
+pqom_buffer = pqom_buffer/c;
+qom = qom/c;
 
-% padding signal to perform convolution
-%===============================================
-qom = [qom; qom(end:-1:end-ws,:)]; 
-
-%%% filtering the signal according to specific note divisions (freq bands)
-%===============================================
-[pqom_buffer, fWn, fHz noteType] = filterBands(qom, fs, bpm, noteDiv, ws, hs);
-
+noteType{length(noteType)+1} = "residual";
+   
 % define output parameters for use in mcplotpqom function
 pqom_parameters =[];
 pqom_parameters.fWn=fWn;
-pqom_parameters.fHz=fHz;
+pqom_parameters.fHz=[freqCenterHz, Inf];
 pqom_parameters.noteType = noteType;
 pqom_parameters.bpm = bpm;
 pqom_parameters.fs = fs;
@@ -205,6 +204,10 @@ pqom_parameters.noteDiv = noteDiv;
 pqom_parameters.ws = ws;
 pqom_parameters.hs = hs;
 pqom_parameters.markerName = markerName;
+pqom_parameters.qom = qom;
+pqom_parameters.ffHz_x = ffHz_x;
+pqom_parameters.ffHz_y = ffHz_y;
+pqom_parameters.ffHz_z = ffHz_z;
 
 if nargout==0
     mcplotpqom(pqom_buffer, pqom_parameters); 
@@ -212,57 +215,78 @@ end
 
 end
 
+function [q,ffq, ffHz,pqom] = rs_pqom(sig, ws, hs, Fs, freqCenterHz)
+
+[q,ffq,ffHz] = rs_qom(sig, ws, hs, Fs, freqCenterHz);
+qq = repmat(q',[1,size(ffHz,2)]);
+pqom = ffHz.*qq;
+
+end
 
 
-function [buffer, freqWn, freqHz, noteType] = filterBands(skelData, fs, bpm, noteDiv, ws, hs)
-%%% freq bands (based on noteDiv)
-% [1: whole note; 2: half note; 4: quarter note; 8: eight note; 16; 32; ] 
-% WARNING: 1 beat time == quarter note 
-%===============================================
-[fB, noteType] = convertNoteDiv2FreqHz(noteDiv,bpm);
+%% compute the QoM and the FFT analysis (per frame)
+function [q,ffq, ffHz] = rs_qom(sig, winSize, hopSize,Fs, freqCenterHz)
 
-% alloc memory
-skelFilt = zeros([size(skelData) length(fB)]);
-s = size(skelFilt(:,1,1));
-buffer = zeros([length(1:hs:s(1)), length(fB)]);
-freqWn = []; % cuttof frequency per band
+if winSize>length(sig)
+    error('signal length must be bigger than winSize');
+end
 
+s = length(sig);
+hWinSize = floor(winSize/2);
+% append signal
+asig = [zeros([1 hWinSize])+sig(1) sig zeros([1 hWinSize])+sig(end)];
+% alloc ouput
+q = zeros([1 ceil(length(sig)/hopSize)]);
 
-%%% converts note duration to frequency (Hz)
-for k=1:length(fB)
-    freqWn(k) = 2*fB(k)/fs; % cutoff freq
-    Wn = 2*[fB(k)-(fB(k)/10) fB(k)+(fB(k)/10)]/fs; % band pass  // TODO SCHRAMM (think about the width of each band)
+nPointFFT = 2^15; %% TODO
 
-    for j=1:size(skelData,2); % each marker
-        v = skelData(:,j); 
-        %sl = length(v);    
-        %%% butterworth filter (second order, band pass)   
-        [bf, af] = butter(2, Wn);
-        out = filtfilt(bf,af,v); 
-        out = out.^2;
-        out = out/sum(out);
-        skelFilt(:,j,k) = out;    
+ffq = zeros([ceil(length(sig)/hopSize), nPointFFT/2+1]);
+ffHz = zeros([ceil(length(sig)/hopSize), length(freqCenterHz)+1]);
+c=0;
+for i=hWinSize+1:hopSize:s+hWinSize
+    ss = asig(i-hWinSize:i+hWinSize); % crop window
+    d = diff(ss);                       % diff
+    d = sum(abs(d));                    % TODO: if winSize is even, window size is equal to winSize+1
+    c=c+1;
+    q(c) = d;  % QoM
+    
+    %% FFT    
+    %f = Fs*(0:(L/2))/L;    
+    %n = round(freqHz*L/Fs);        
+    [X] = rs_fft(ss,nPointFFT);        
+    ffq(c,:) = X;
+    
+    n = round(freqCenterHz*nPointFFT/Fs); % center frequencies
+    for j=1:length(n)        
+        ffHz(c,j) = X( round(n(j)) );                 
     end
-end
-
-%%% integrate along the window and markers, for each band
-for k=1:length(fB)
-    c=1;    
-    for i=1:hs:s(1)-ws;
-        v = sum(skelFilt(:,:,k),2); % sum along markers
-        v = v(i:i+ws);
-        ss = sum(v);  % sum along window
-        buffer(c, k) = ss;        
-        c=c+1;    
+        
+    
+    [pks,lcs]=findpeaks(X, 'npeaks', 10); %//TODO how to specify the number of peaks?     
+    toDelete = zeros(size(lcs));
+    for j=1:length(pks)        
+        for k=1:length(n)
+            if (abs(lcs(j)-n(k))<5)
+                toDelete(j)=1;
+            end
+        end
     end
-end
-              
-%%% trim buffer tail (remove the padding)
-buffer = buffer(1:end-ws/hs, :);
-freqHz = freqWn*fs/2;
+    pks(toDelete==1)=[];    
+    ffHz(c,end) = sum(pks);   
 end
 
 
+end
+
+%% compute the FFT
+function [X] = rs_fft(x, nPointFFT)
+L = length(x);
+h = hann(L)';
+X = abs(fft(x.*h, nPointFFT)); % force fft with higher resolution (fft does pad with zeros)
+X = X(1:floor(nPointFFT/2)+1);
+end
+
+%% convert the periodic note duration/division (rhythm or beat) to Hz
 function [freqHz, noteType] = convertNoteDiv2FreqHz(noteDiv, bpm)
 noteType = {};
 freqHz = [];
@@ -311,8 +335,8 @@ if ischar(noteDiv)
             dur = 1/8;
             noteType{k}='32th note';
         otherwise 
-            [y,fs] = audioread('mcsound.wav');
-            sound(y,fs);
+%            [y,fs] = audioread('mcsound.wav');
+%            sound(y,fs);
             error('mcpqom:input_parameters', 'Invalid note division. noteDiv==%s  \nThe string format only suport [1: whole note; 2: half note; 4: quarter note; 8: eight note; 16 or 32; ]', num2str(n));
     end
     %[dur, tripleN, dotN, dur*tripleN*dotN, 1/(dur*tripleN*dotN)],
@@ -327,3 +351,5 @@ else % when noteDiv means Frequency (in Hz)
     end
 end
 end
+
+    
