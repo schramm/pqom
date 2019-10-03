@@ -1,4 +1,4 @@
-function [pqom_buffer, pqom_parameters] = mcpqom(mocapData, markerName, frameRange, bpm, noteDiv, bandSize, winSize, hopSize)
+function [pqom_buffer, pqom_parameters] = mcpqom(mocapData, markerName, frameRange, bpm, noteDiv, winSize, hopSize)
 % Estimates the periodic quantity of motion from a MoCap structure.
 %
 % syntax
@@ -22,8 +22,6 @@ function [pqom_buffer, pqom_parameters] = mcpqom(mocapData, markerName, frameRan
 %            note divisions can be specified as a numeric array. In this case, 
 %            the array values are interpreted as frequency in Hz. 
 %            (eg. [3.5  4  5.2] will estimate PQoM on 3.5Hz, 4Hz and 5.2Hz)
-% bandSize: neighboarhood around the centerFrequence that is aggregate to. 
-%            compute the quantity of motion (default: 0.25)
 % winSize: window size used to evaluate the PQoM (in beat times, default:  4*bpm)
 % hopSize: the step  size between the windows of evaluation (in beat times, default:  1*bpm)  
 %                    
@@ -77,14 +75,11 @@ pqom_buffer = [];
 
 %%% checking input arguments
 %===============================================
-if nargin<8
+if nargin<7
     hopSize = 1; 
 end
-if nargin<7
-    winSize = 4;
-end
 if nargin<6
-    bandSize = 0.25;
+    winSize = 4;
 end
 if nargin<5
     noteDiv = [1 2 4 8]; 
@@ -176,17 +171,21 @@ for k=1:length(markerName)
     z(isnan(z))=0;
 
     % estimate PQoM at each axis (x,y and z)
-    [q_x,ffq_x, ffHz_x,pqom_x] = rs_pqom(x', ws, hs, fs, freqCenterHz,bandSize);
-    [q_y,ffq_y, ffHz_y,pqom_y] = rs_pqom(y', ws, hs, fs, freqCenterHz,bandSize);
-    [q_z,ffq_z, ffHz_z,pqom_z] = rs_pqom(z', ws, hs, fs, freqCenterHz,bandSize);       
+    [q_x,ffq_x, ffHz_x,pqom_x] = rs_pqom(x', ws, hs, fs, freqCenterHz);
+    [q_y,ffq_y, ffHz_y,pqom_y] = rs_pqom(y', ws, hs, fs, freqCenterHz);
+    [q_z,ffq_z, ffHz_z,pqom_z] = rs_pqom(z', ws, hs, fs, freqCenterHz);       
     
     if (isempty(pqom_buffer)) 
         pqom_buffer = zeros(size(pqom_x));
         qom = zeros(size(q_x));
     end
-    pqom_buffer =  pqom_buffer + pqom_x + pqom_y +pqom_z;        
-    qom = qom + q_x + q_y + q_z;
-    c = c+3;
+   pqom_buffer =  pqom_buffer + pqom_x + pqom_y +pqom_z;        
+   qom = qom + q_x + q_y + q_z;
+ %  pqom_buffer =  pqom_buffer + pqom_x;        
+ %  qom = qom + q_x;
+
+   c = c+3;
+ %  c=c+1;
 end
 
 pqom_buffer = pqom_buffer/c;
@@ -206,6 +205,9 @@ pqom_parameters.ws = ws;
 pqom_parameters.hs = hs;
 pqom_parameters.markerName = markerName;
 pqom_parameters.qom = qom;
+pqom_parameters.ffHz_x = ffHz_x;
+pqom_parameters.ffHz_y = ffHz_y;
+pqom_parameters.ffHz_z = ffHz_z;
 
 if nargout==0
     mcplotpqom(pqom_buffer, pqom_parameters); 
@@ -213,9 +215,9 @@ end
 
 end
 
-function [q,ffq, ffHz,pqom] = rs_pqom(sig, ws, hs, Fs, freqCenterHz, bandSize)
+function [q,ffq, ffHz,pqom] = rs_pqom(sig, ws, hs, Fs, freqCenterHz)
 
-[q,ffq,ffHz] = rs_qom(sig, ws, hs, Fs, freqCenterHz, bandSize);
+[q,ffq,ffHz] = rs_qom(sig, ws, hs, Fs, freqCenterHz);
 qq = repmat(q',[1,size(ffHz,2)]);
 pqom = ffHz.*qq;
 
@@ -223,7 +225,7 @@ end
 
 
 %% compute the QoM and the FFT analysis (per frame)
-function [q,ffq, ffHz] = rs_qom(sig, winSize, hopSize,Fs, freqCenterHz, bandSize)
+function [q,ffq, ffHz] = rs_qom(sig, winSize, hopSize,Fs, freqCenterHz)
 
 if winSize>length(sig)
     error('signal length must be bigger than winSize');
@@ -236,7 +238,7 @@ asig = [zeros([1 hWinSize])+sig(1) sig zeros([1 hWinSize])+sig(end)];
 % alloc ouput
 q = zeros([1 ceil(length(sig)/hopSize)]);
 
- nPointFFT = 2^18; %% TODO
+nPointFFT = 2^15; %% TODO
 
 ffq = zeros([ceil(length(sig)/hopSize), nPointFFT/2+1]);
 ffHz = zeros([ceil(length(sig)/hopSize), length(freqCenterHz)+1]);
@@ -250,36 +252,38 @@ for i=hWinSize+1:hopSize:s+hWinSize
     
     %% FFT    
     %f = Fs*(0:(L/2))/L;    
-    %n = round(freqHz*L/Fs);    
-    [nX,X] = rs_norm_fft(ss,nPointFFT);    
-    ffq(c,:) = nX;
+    %n = round(freqHz*L/Fs);        
+    [X] = rs_fft(ss,nPointFFT);        
+    ffq(c,:) = X;
     
     n = round(freqCenterHz*nPointFFT/Fs); % center frequencies
-    % 1Hz band width = 1/(Fs/nPointFFT) bins
-    % we aggregate bins using a band with ~1Hz x bandSize     
-    bw = round(1/(Fs/nPointFFT) * bandSize); 
-  
-    % aggregate around the freq center
     for j=1:length(n)        
-        bI = max(1, round(n(j)-bw/2)); 
-        bE = min(round(n(j)+bw/2), nPointFFT); 
-        ffHz(c,j) = sum(nX(bI:bE));                 
+        ffHz(c,j) = X( round(n(j)) );                 
     end
-    r =  sum(nX) - sum(ffHz(c,:)); % compute residual
-    ffHz(c,end) = r;
-    ffHz(c, :) =  ffHz(c, :)/(sum(ffHz(c, :))+eps); % normalise
+        
+    
+    [pks,lcs]=findpeaks(X, 'npeaks', 10); %//TODO how to specify the number of peaks?     
+    toDelete = zeros(size(lcs));
+    for j=1:length(pks)        
+        for k=1:length(n)
+            if (abs(lcs(j)-n(k))<5)
+                toDelete(j)=1;
+            end
+        end
+    end
+    pks(toDelete==1)=[];    
+    ffHz(c,end) = sum(pks);   
 end
 
 
 end
 
-%% compute the normalized FFT
-function [nX,X] = rs_norm_fft(x, nPointFFT)
+%% compute the FFT
+function [X] = rs_fft(x, nPointFFT)
 L = length(x);
 h = hann(L)';
-X = abs(fft(x.*h,  nPointFFT)); % force fft with higher resolution (fft does pad with zeros)
-X = X(1:floor( nPointFFT/2)+1);
-nX = X ./ sum(X);
+X = abs(fft(x.*h, nPointFFT)); % force fft with higher resolution (fft does pad with zeros)
+X = X(1:floor(nPointFFT/2)+1);
 end
 
 %% convert the periodic note duration/division (rhythm or beat) to Hz
