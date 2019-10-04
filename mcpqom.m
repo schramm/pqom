@@ -43,22 +43,21 @@ function [pqom_buffer, pqom_parameters] = mcpqom(mocapData, markerName, frameRan
 % mcplotpqom
 %
 % ===============================================
-% Version 1.0 
-% July 2015
+% Version 2.0 
+% October 2019
 %
-% Updates: 
-% Version 1.1 (in progress)
-% August 2019
 
 % ===============================================
-% Rodrigo Schramm (rodrigo.schramm@gmail.com)  and   Federico Visi (federico.visi@plymouth.ac.uk) 
-% UFRGS / Brazil          ICCMR / Plymouth University / UK
+% Rodrigo Schramm (rodrigo.schramm@gmail.com)  and   Federico Visi (mail@federicovisi.com) 
+% UFRGS, Universidade Federal do Rio Grande do Sul, Brazil 
+% GEMM))), Gesture, Embodiment and Machines in Music, Luleå University of Technology, Sweden
+% Interdisciplinary Centre for Computer Music Research (ICCMR), University of Plymouth, UK
+%
 % 
 % If you plan to use this script, please cite the paper: 
-%     Visi, Federico and Schramm, Rodrigo and Miranda, Eduardo. Gesture in Performance with Traditional Musical Instruments and Electronics: 
-%     Use of Embodied Music Cognition and Multimodal Motion Capture to Design Gestural Mapping Strategies.
-%     Proceedings of the 2014 International Workshop on Movement and
-%     Computing. MOCO '14, p. 100-105, ACM, Paris, 2014.
+%       Visi, F., Coorevits, E., Schramm, R., & Miranda, E. R. (2017). 
+%       Musical Instruments, Body Movement, Space, and Motion Data: Music as an Emergent Multimodal Choreography. 
+%       Human Technology, 13(1), 58?81. https://doi.org/10.17011/ht/urn.201705272518
 % ===============================================
 %
 % Part of the Motion Capture Toolbox, Copyright 2008, 

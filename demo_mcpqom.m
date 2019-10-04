@@ -1,43 +1,14 @@
+%% read mocap data
+d = mcread('PQoM_120BPM0002.mat');
 
-%% mcpqom  settings
+%% mcpqom  parameters
+markerNames1 = {'hand'}; % marker(s) to extract PQoM from
 frameRange = []; % using full range
-bpm = 60; % 60 beats per minute
-noteDiv = '1 2 4' % note divisions (whole, half and quarter notes)
-windowSize = 4; % 4 beats
-hopSize = .5;   % 1/2 beat
-% =======================================================
+bpm = 120; % 120 beats per minute
+noteDiv = '2 2t 4 8 8d 16' % note divisions (half, half triplets, quarter, eight, dotted eight, sixteenth)
+windowSize = 10; % 10 beats
+hopSize = .1; % 1/10 of a beat
 
-
-%% demo 1
-% =======================================================
-%% load MoCap structure (example 1);
-load('example1.mat');  % load MoCap into 'data' variable
-% define markers to extract PQoM
-markerNames1 = {'52_bow_frog'}; % demo 1
-%% extract PQoM 
-[PQoM_Buffer, pqom_parameters] = mcpqom(data, markerNames1, [], bpm, noteDiv, windowSize, hopSize);
-mcplotpqom(PQoM_Buffer, pqom_parameters);  
-%% demo 2
-% =======================================================
-%% load MoCap structure 
-load('example1.mat'); 
-% define markers to extract PQoM
-markerNames2 = {'08_torso_spine_(T5)', '52_bow_frog'}; % demo 2
-noteDiv = [.5 1 2.2];
-%% extract PQoM 
-[PQoM_Buffer, pqom_parameters] = mcpqom(data, markerNames2, [], bpm, noteDiv, windowSize, hopSize);
-mcplotpqom(PQoM_Buffer, pqom_parameters); 
-
-%% demo 3
-% =======================================================
-%% load MoCap structure 
-load('example1.mat'); 
-% define markers to extract PQoM
-markerNames3 = {'08_torso_spine_(T5)', '52_bow_frog', '05_L_torso_shoulder'}; % demo 3
-noteDiv = '1d 2 4t' % note divisions (whole [dot], half and quarter [tripplet])
-%% extract PQoM 
-[PQoM_Buffer, pqom_parameters] = mcpqom(data, markerNames3, [], bpm, noteDiv, windowSize, hopSize);
-mcplotpqom(PQoM_Buffer, pqom_parameters); 
-
-
-
+%% extract PQoM and plot the results
+[PQoM_Buffer, pqom_parameters] = mcpqom(d, markerNames1, frameRange, bpm, noteDiv, windowSize, hopSize); %compute PQoM
+mcplotpqom(PQoM_Buffer, pqom_parameters); %plot PQoM
