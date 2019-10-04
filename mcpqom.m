@@ -131,11 +131,12 @@ data = mocapData.data(frameIni:frameEnd,:);
 
 [freqCenterHz, noteType] = convertNoteDiv2FreqHz(noteDiv, bpm);
 
-%%% filter settings
+%%% settings
 %===============================================
 fs = mocapData.freq;
 ws = max(round((60/bpm)*winSize*fs),1); % window size (in frames)
 hs = max(round((60/bpm)*hopSize*fs),1); % hop size (in frames)
+
 
 if ws>=size(data,1)
     [y,fs] = audioread('mcsound.wav');
@@ -181,11 +182,7 @@ for k=1:length(markerName)
     end
    pqom_buffer =  pqom_buffer + pqom_x + pqom_y +pqom_z;        
    qom = qom + q_x + q_y + q_z;
- %  pqom_buffer =  pqom_buffer + pqom_x;        
- %  qom = qom + q_x;
-
-   c = c+3;
- %  c=c+1;
+   c = c+3; 
 end
 
 pqom_buffer = pqom_buffer/c;
@@ -238,7 +235,7 @@ asig = [zeros([1 hWinSize])+sig(1) sig zeros([1 hWinSize])+sig(end)];
 % alloc ouput
 q = zeros([1 ceil(length(sig)/hopSize)]);
 
-nPointFFT = 2^15; %% TODO
+nPointFFT = max( 2^10, winSize); %% TODO
 
 ffq = zeros([ceil(length(sig)/hopSize), nPointFFT/2+1]);
 ffHz = zeros([ceil(length(sig)/hopSize), length(freqCenterHz)+1]);
@@ -248,7 +245,8 @@ for i=hWinSize+1:hopSize:s+hWinSize
     d = diff(ss);                       % diff
     d = sum(abs(d));                    % TODO: if winSize is even, window size is equal to winSize+1
     c=c+1;
-    q(c) = d;  % QoM
+    q(c) = d / (winSize/Fs);  % QoM
+    %q(c) = d;  % QoM
     
     %% FFT    
     %f = Fs*(0:(L/2))/L;    
@@ -256,13 +254,13 @@ for i=hWinSize+1:hopSize:s+hWinSize
     [X] = rs_fft(ss,nPointFFT);        
     ffq(c,:) = X;
     
+    [pks,lcs]=findpeaks(X, 'npeaks', 10); %//TODO how to specify the number of peaks?         
     n = round(freqCenterHz*nPointFFT/Fs); % center frequencies
     for j=1:length(n)        
-        ffHz(c,j) = X( round(n(j)) );                 
+        ffHz(c,j) = X( round(n(j)) );                         
     end
         
-    
-    [pks,lcs]=findpeaks(X, 'npeaks', 10); %//TODO how to specify the number of peaks?     
+    % compute residual (sum of peaks that not belong to the freq bands we are analysing
     toDelete = zeros(size(lcs));
     for j=1:length(pks)        
         for k=1:length(n)
@@ -272,7 +270,8 @@ for i=hWinSize+1:hopSize:s+hWinSize
         end
     end
     pks(toDelete==1)=[];    
-    ffHz(c,end) = sum(pks);   
+    ffHz(c,end) = sum(pks);   %% residual
+    ffHz(c,:) = ffHz(c,:)/sum(ffHz(c,:)); % normalise
 end
 
 
@@ -282,8 +281,11 @@ end
 function [X] = rs_fft(x, nPointFFT)
 L = length(x);
 h = hann(L)';
-X = abs(fft(x.*h, nPointFFT)); % force fft with higher resolution (fft does pad with zeros)
-X = X(1:floor(nPointFFT/2)+1);
+X = fft(x.*h, nPointFFT); % force fft with higher resolution (fft does pad with zeros)
+X = abs(X/L);
+P1 = X(1:nPointFFT/2+1);
+%P1(2:end-1) = 2*P1(2:end-1); 
+X = P1;
 end
 
 %% convert the periodic note duration/division (rhythm or beat) to Hz
